@@ -53,15 +53,17 @@ pipeline {
         stage('Build & Test') {
             steps {
                 sh '''
+                    TEST_CONTAINER="test-runner-${BUILD_NUMBER}"
+
                     docker build -t ${IMAGE_NAME}:${IMAGE_TAG} .
 
-                    docker rm -f test-runner 2>/dev/null || true
+                    docker rm -f "$TEST_CONTAINER" 2>/dev/null || true
 
                     set +e
 
                     docker run \
                     -e CI=true \
-                    --name test-runner \
+                    --name "$TEST_CONTAINER" \
                     ${IMAGE_NAME}:${IMAGE_TAG} \
                     pytest tests/ -v \
                     --cov=src \
@@ -73,8 +75,8 @@ pipeline {
 
                     set -e
 
-                    docker cp test-runner:/tmp/coverage.xml ./coverage.xml 2>/dev/null || true
-                    docker rm -f test-runner 2>/dev/null || true
+                    docker cp "$TEST_CONTAINER":/tmp/coverage.xml ./coverage.xml 2>/dev/null || true
+                    docker rm -f "$TEST_CONTAINER" 2>/dev/null || true
 
                     exit $TEST_EXIT_CODE
                 '''
@@ -222,7 +224,7 @@ pipeline {
     post {
         always {
             sh '''
-                docker rm -f test-runner 2>/dev/null || true
+                docker ps -aq --filter "name=^/test-runner" | xargs -r docker rm -f || true
             '''
         }
 

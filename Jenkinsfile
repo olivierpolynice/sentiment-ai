@@ -19,7 +19,6 @@ pipeline {
                     ).trim()
                 }
 
-                echo "Branche : ${env.BRANCH_NAME}"
                 echo "Commit : ${env.GIT_COMMIT}"
                 echo "Tag image : ${env.IMAGE_TAG}"
 
@@ -63,7 +62,6 @@ pipeline {
                     set -e
 
                     docker cp test-runner:/tmp/coverage.xml ./coverage.xml 2>/dev/null || true
-
                     docker rm -f test-runner 2>/dev/null || true
 
                     exit $TEST_EXIT_CODE
@@ -72,7 +70,7 @@ pipeline {
 
             post {
                 failure {
-                    echo 'Tests échoués ou couverture de code insuffisante (< 70 %).'
+                    echo 'Tests échoués ou couverture insuffisante (< 70 %).'
                 }
             }
         }
@@ -98,7 +96,7 @@ pipeline {
                         -Dsonar.projectBaseDir="$WORKSPACE" \
                         -Dsonar.sources=src \
                         -Dsonar.tests=tests \
-                        -Dsonar.python.version=3.12 \
+                        -Dsonar.python.version=3.11 \
                         -Dsonar.python.coverage.reportPaths=coverage.xml \
                         -Dsonar.sourceEncoding=UTF-8 \
                         -Dsonar.scanner.metadataFilePath="$WORKSPACE/report-task.txt"
@@ -137,10 +135,6 @@ pipeline {
         }
 
         stage('Push') {
-            when {
-                branch 'main'
-            }
-
             steps {
                 withCredentials([
                     usernamePassword(
@@ -165,10 +159,6 @@ pipeline {
         }
 
         stage('Deploy Staging') {
-            when {
-                branch 'main'
-            }
-
             steps {
                 echo "Déploiement de ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} en staging..."
 
@@ -201,11 +191,11 @@ pipeline {
 
         success {
             echo "Pipeline réussi."
-            echo "Image publiée : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Image publiée et déployée : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
         }
 
         failure {
-            echo 'Pipeline échoué. Consulte les logs de Jenkins pour identifier le stage concerné.'
+            echo 'Pipeline échoué. Consulte les logs du stage concerné.'
         }
     }
 }

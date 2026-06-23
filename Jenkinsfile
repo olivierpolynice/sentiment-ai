@@ -4,11 +4,6 @@ pipeline {
     environment {
         IMAGE_NAME = 'sentiment-ai'
         REGISTRY = 'ghcr.io/olivierpolynice'
-
-        IMAGE_TAG = sh(
-            script: 'git rev-parse --short HEAD',
-            returnStdout: true
-        ).trim()
     }
 
     stages {
@@ -16,8 +11,18 @@ pipeline {
         stage('Checkout') {
             steps {
                 checkout scm
+
+                script {
+                    env.IMAGE_TAG = sh(
+                        script: 'git rev-parse --short HEAD',
+                        returnStdout: true
+                    ).trim()
+                }
+
                 echo "Branche : ${env.BRANCH_NAME}"
                 echo "Commit : ${env.GIT_COMMIT}"
+                echo "Tag image : ${env.IMAGE_TAG}"
+
                 sh 'git log --oneline -5'
             }
         }
@@ -27,7 +32,7 @@ pipeline {
                 sh '''
                     docker run --rm \
                     --volumes-from jenkins \
-                    -w $WORKSPACE \
+                    -w "$WORKSPACE" \
                     python:3.12-slim \
                     sh -c "pip install flake8 -q && flake8 src/ --max-line-length=100"
                 '''
@@ -42,6 +47,7 @@ pipeline {
                     docker rm -f test-runner 2>/dev/null || true
 
                     set +e
+
                     docker run \
                     -e CI=true \
                     --name test-runner \
@@ -53,9 +59,11 @@ pipeline {
                     --cov-fail-under=70
 
                     TEST_EXIT_CODE=$?
+
                     set -e
 
                     docker cp test-runner:/tmp/coverage.xml ./coverage.xml 2>/dev/null || true
+
                     docker rm -f test-runner 2>/dev/null || true
 
                     exit $TEST_EXIT_CODE
@@ -64,7 +72,7 @@ pipeline {
 
             post {
                 failure {
-                    echo 'Tests échoués ou coverage insuffisant (< 70%)'
+                    echo 'Tests échoués ou couverture de code insuffisante (< 70 %).'
                 }
             }
         }
@@ -89,10 +97,11 @@ pipeline {
                         -Dsonar.projectName=SentimentAI \
                         -Dsonar.projectBaseDir="$WORKSPACE" \
                         -Dsonar.sources=src \
-                        -Dsonar.python.version=3.11 \
+                        -Dsonar.tests=tests \
+                        -Dsonar.python.version=3.12 \
                         -Dsonar.python.coverage.reportPaths=coverage.xml \
                         -Dsonar.sourceEncoding=UTF-8 \
-                        -Dsonar.scanner.metadataFilePath=$WORKSPACE/report-task.txt
+                        -Dsonar.scanner.metadataFilePath="$WORKSPACE/report-task.txt"
                     '''
                 }
             }
@@ -121,9 +130,8 @@ pipeline {
             }
 
             post {
-                failure {
-                    echo 'Vulnérabilités CRITICAL ou HIGH détectées !'
-                    echo 'Corrigez les dépendances avant de déployer.'
+                success {
+                    echo 'Analyse Trivy terminée.'
                 }
             }
         }
@@ -142,8 +150,8 @@ pipeline {
                     )
                 ]) {
                     sh '''
-                        echo $REGISTRY_PASS | docker login ghcr.io \
-                        -u $REGISTRY_USER \
+                        echo "$REGISTRY_PASS" | docker login ghcr.io \
+                        -u "$REGISTRY_USER" \
                         --password-stdin
 
                         docker tag ${IMAGE_NAME}:${IMAGE_TAG} ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
@@ -155,19 +163,49 @@ pipeline {
                 }
             }
         }
+
+        stage('Deploy Staging') {
+            when {
+                branch 'main'
+            }
+
+            steps {
+                echo "Déploiement de ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} en staging..."
+
+                sh '''
+                    docker compose \
+                    -f docker-compose.yml \
+                    -p staging \
+                    down 2>/dev/null || true
+
+                    IMAGE_NAME=${IMAGE_NAME} \
+                    IMAGE_TAG=${IMAGE_TAG} \
+                    REGISTRY=${REGISTRY} \
+                    docker compose \
+                    -f docker-compose.yml \
+                    -p staging \
+                    up -d
+
+                    echo "Staging disponible sur http://localhost:8001"
+                '''
+            }
+        }
     }
 
     post {
         always {
-            sh 'docker compose down -v 2>/dev/null || true'
+            sh '''
+                docker rm -f test-runner 2>/dev/null || true
+            '''
         }
 
         success {
-            echo "Pipeline réussi ! Image : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
+            echo "Pipeline réussi."
+            echo "Image publiée : ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}"
         }
 
         failure {
-            echo 'Pipeline échoué. Consultez les logs ci-dessus.'
+            echo 'Pipeline échoué. Consulte les logs de Jenkins pour identifier le stage concerné.'
         }
     }
 }

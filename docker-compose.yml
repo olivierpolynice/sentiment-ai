@@ -2,12 +2,12 @@ version: "3.9"
 
 services:
   sentiment-ai:
-    build: .
+    image: ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
     container_name: sentiment-staging
     ports:
       - "8001:8000"
     environment:
-      - ENV=development
+      - ENV=staging
     networks:
       - cicd-network
     restart: unless-stopped
@@ -20,4 +20,4 @@ services:
 
 networks:
   cicd-network:
-    driver: bridge
+    external: true

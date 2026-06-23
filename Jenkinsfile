@@ -78,6 +78,8 @@ pipeline {
                     docker cp "$TEST_CONTAINER":/tmp/coverage.xml ./coverage.xml 2>/dev/null || true
                     docker rm -f "$TEST_CONTAINER" 2>/dev/null || true
 
+                    sed -i "s#<source>/app/src</source>#<source>$WORKSPACE/src</source>#" coverage.xml
+
                     exit $TEST_EXIT_CODE
                 '''
             }

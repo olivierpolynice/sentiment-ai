@@ -1,3 +1,4 @@
+```groovy
 pipeline {
     agent any
 
@@ -163,20 +164,17 @@ pipeline {
                 echo "Déploiement de ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG} en staging..."
 
                 sh '''
-                    docker compose \
-                    -f docker-compose.yml \
-                    -p staging \
-                    down 2>/dev/null || true
+                    docker rm -f sentiment-staging 2>/dev/null || true
 
-                    IMAGE_NAME=${IMAGE_NAME} \
-                    IMAGE_TAG=${IMAGE_TAG} \
-                    REGISTRY=${REGISTRY} \
-                    docker compose \
-                    -f docker-compose.yml \
-                    -p staging \
-                    up -d
+                    docker run -d \
+                    --name sentiment-staging \
+                    --restart unless-stopped \
+                    --network cicd-network \
+                    -p 8001:8000 \
+                    -e ENV=staging \
+                    ${REGISTRY}/${IMAGE_NAME}:${IMAGE_TAG}
 
-                    echo "Staging disponible sur http://localhost:8001"
+                    echo "Staging disponible sur http://localhost:8001/health"
                 '''
             }
         }
@@ -199,3 +197,4 @@ pipeline {
         }
     }
 }
+```

@@ -1,6 +1,5 @@
 from fastapi import FastAPI
 # Application principale FastAPI utilisée par Jenkins pour tester le pipeline CI/CD
-app = FastAPI(title="SentimentAI", version="0.1.0")
 from src.model import SentimentModel
 from src.schemas import PredictionRequest, PredictionResponse
 
